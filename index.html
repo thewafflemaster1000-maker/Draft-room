@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Draft Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --desk:#D9E1E8; --page:#FFFFFF; --ink:#1D2329; --muted:#66727E; --line:#C3CDD6;
+  --side:#EEF2F5; --accent:#2F5D9A; --accent-ink:#FFFFFF; --gold:#D9A521; --brass:#B8913A; --danger:#A33A2E;
+  --shadow:0 1px 2px rgba(29,35,41,.08),0 8px 24px rgba(29,35,41,.10);
+  --script:"Courier Prime","Courier New",Courier,monospace;
+  --ui:"Work Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --desk:#151B21; --page:#222A32; --ink:#E4E8EC; --muted:#8C98A4; --line:#34404B;
+    --side:#1A2128; --accent:#7FA6DB; --accent-ink:#0F1720; --gold:#E2B74A; --brass:#C9A55A; --danger:#E07A6E;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --desk:#151B21; --page:#222A32; --ink:#E4E8EC; --muted:#8C98A4; --line:#34404B;
+  --side:#1A2128; --accent:#7FA6DB; --accent-ink:#0F1720; --gold:#E2B74A; --brass:#C9A55A; --danger:#E07A6E;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 64px)}
+body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.5 var(--ui);-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:250px minmax(0,1fr) 320px;min-height:100%}
+@media (min-width:1200px){.app:has(.assist[hidden]){grid-template-columns:250px minmax(0,1fr)}}
+@media (max-width:1199px){.app{grid-template-columns:230px minmax(0,1fr)}}
+@media (max-width:819px){.app{grid-template-columns:minmax(0,1fr)}}
+
+/* Sidebar */
+.side{background:var(--side);border-right:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;padding:20px 14px 16px;gap:14px}
+.brand{font:700 22px/1.1 var(--script);margin:2px 4px 0;letter-spacing:.01em}
+.brand small{display:block;font:400 13px/1.4 var(--ui);color:var(--muted);margin-top:4px;letter-spacing:0}
+.list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;margin:0 -4px;padding:0 4px}
+.item{display:block;width:100%;text-align:left;border:0;background:transparent;border-radius:8px;padding:9px 10px;cursor:pointer}
+.item:hover{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.item[aria-current="true"]{background:var(--page);box-shadow:inset 3px 0 0 var(--accent)}
+.item .t{display:block;font:700 14px/1.3 var(--script);text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .m{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.mode-note{margin:0 4px;font-size:12.5px;color:var(--muted)}
+.empty-list{color:var(--muted);font-size:13.5px;padding:6px 10px}
+
+@media (max-width:819px){
+  .side{position:fixed;left:0;top:0;bottom:0;height:auto;width:min(300px,86vw);z-index:40;transform:translateX(-105%);transition:transform .2s ease;padding-top:calc(20px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
+  .side.open{transform:none}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:39}
+}
+
+/* Buttons */
+.btn{border:1px solid var(--line);background:var(--page);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:500;font-size:14px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--danger);background:transparent;border-color:transparent}
+.btn.danger:hover{border-color:var(--danger)}
+.btn[disabled]{opacity:.5;cursor:default}
+.only-narrow{display:none}
+@media (max-width:819px){.only-narrow{display:inline-block}}
+.only-mid{display:none}
+@media (max-width:1199px){.only-mid{display:inline-block}}
+
+/* Toolbar */
+.main{min-width:0}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:10px;padding:10px 16px;background:color-mix(in srgb,var(--desk) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.types{display:flex;gap:2px;background:var(--page);border:1px solid var(--line);border-radius:9px;padding:3px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.types::-webkit-scrollbar{display:none}
+.types button{border:0;background:transparent;border-radius:6px;padding:5px 10px;font:500 13.5px/1.2 var(--ui);color:var(--muted);cursor:pointer;white-space:nowrap}
+.types button:hover{color:var(--ink)}
+.types button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.bar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.status{font-size:13px;color:var(--muted);white-space:nowrap}
+@media (max-width:600px){.status{display:none}.bar{padding:8px 10px}}
+
+/* Page */
+.stage{padding:28px 20px 40px;display:flex;flex-direction:column;align-items:center}
+.hint{max-width:760px;width:100%;margin:0 0 12px;font-size:13px;color:var(--muted)}
+kbd{font:500 12px/1 var(--ui);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:2px 5px;background:var(--page);color:var(--ink)}
+.sheet{position:relative;width:100%;max-width:760px;background:var(--page);box-shadow:var(--shadow);border-radius:3px;padding:64px 64px 96px 108px;min-height:980px}
+/* the brass brads of a bound script */
+.sheet::before,.sheet::after{content:"";position:absolute;left:34px;width:13px;height:13px;border-radius:50%;background:radial-gradient(circle at 35% 35%,color-mix(in srgb,var(--brass) 55%,#fff),var(--brass) 60%,color-mix(in srgb,var(--brass) 70%,#000));box-shadow:0 1px 1px rgba(0,0,0,.25)}
+.sheet::before{top:92px}
+.sheet::after{top:880px}
+@media (max-width:700px){
+  .stage{padding:14px 8px 28px}
+  .sheet{padding:36px 22px 64px 40px;min-height:70vh}
+  .sheet::before,.sheet::after{left:13px;width:10px;height:10px}
+  .sheet::before{top:40px}.sheet::after{display:none}
+}
+
+.titlepage{text-align:center;margin:0 0 44px;padding-bottom:28px;border-bottom:1px dashed var(--line)}
+.titlepage input{display:block;width:100%;border:0;background:transparent;text-align:center;font-family:var(--script);padding:4px 0;border-bottom:1px solid transparent}
+.titlepage input:focus{outline:none;border-bottom-color:var(--accent)}
+#title{font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
+#title::placeholder{text-transform:uppercase}
+.titlepage .by{display:block;font:italic 15px/1.4 var(--script);color:var(--muted);margin:10px 0 2px}
+#author{font-size:16px}
+.titlepage input::placeholder{color:var(--muted);opacity:.7}
+
+.page{font:16px/1.4 var(--script);outline:none;min-height:520px;caret-color:var(--accent);word-wrap:break-word}
+@media (max-width:700px){.page{font-size:14.5px}}
+.page[contenteditable="false"]{opacity:.55}
+.el{position:relative;margin-top:1.1em;white-space:pre-wrap;padding-left:0}
+.el:first-child{margin-top:0}
+.el[data-t="scene"]{text-transform:uppercase;font-weight:700;margin-top:2em}
+.el[data-t="scene"]:first-child{margin-top:0}
+.el[data-t="character"]{text-transform:uppercase;margin-left:36.7%}
+.el[data-t="parenthetical"]{margin-top:0;margin-left:26.7%;max-width:36%}
+.el[data-t="dialogue"]{margin-top:0;margin-left:16.7%;max-width:60%}
+.el[data-t="transition"]{text-transform:uppercase;text-align:right}
+@media (max-width:700px){
+  .el[data-t="character"]{margin-left:30%}
+  .el[data-t="parenthetical"]{margin-left:20%;max-width:60%}
+  .el[data-t="dialogue"]{margin-left:10%;max-width:80%}
+}
+.el.empty::before{content:attr(data-ph);color:var(--muted);opacity:.45;pointer-events:none;position:absolute;left:0;right:0;top:0;white-space:nowrap;overflow:hidden}
+.el[data-t="transition"].empty::before{text-align:right}
+.el.fresh::after{content:"";position:absolute;left:-16px;top:.2em;bottom:.2em;width:3px;border-radius:2px;background:var(--gold);transition:opacity 1.2s ease}
+.el.faded::after{opacity:0}
+@media (prefers-reduced-motion:reduce){.el.fresh::after{transition:none}.side{transition:none}}
+
+.sheet-foot{width:100%;max-width:760px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
+.stats{font-size:13px;color:var(--muted);margin-right:auto}
+
+/* Assistant */
+.assist{border-left:1px solid var(--line);background:var(--side);position:sticky;top:env(safe-area-inset-top,0px);height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;padding:22px 18px}
+@media (max-width:1199px){
+  .assist{position:static;height:auto;grid-column:2;border-left:0;border-top:1px solid var(--line);margin:0}
+}
+@media (max-width:819px){.assist{grid-column:1}}
+.assist h2{font:700 17px/1.2 var(--script);margin:0 0 6px}
+.assist p{margin:0 0 14px;font-size:13.5px;color:var(--muted)}
+.assist label{display:block;font-weight:600;font-size:13.5px;margin-bottom:6px}
+.assist textarea{width:100%;min-height:130px;resize:vertical;border:1px solid var(--line);border-radius:8px;background:var(--page);padding:10px 11px;font-size:14px;line-height:1.45}
+.assist textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.assist .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.assist .note{margin-top:12px;font-size:13.5px;color:var(--ink);min-height:1.5em}
+.assist .ideas{margin-top:22px;border-top:1px dashed var(--line);padding-top:14px}
+.assist .ideas h3{font-size:13px;font-weight:600;margin:0 0 8px;color:var(--muted)}
+.chip{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--page);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;cursor:pointer;line-height:1.4}
+.chip:hover{border-color:var(--accent)}
+.loading{display:inline-block;width:.9em;height:.9em;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;vertical-align:-2px;margin-right:6px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.loading{animation:none}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side" aria-label="Your scripts">
+    <h1 class="brand">Draft Room<small>Unlimited scripts, saved as you type</small></h1>
+    <button id="newBtn" class="btn primary" type="button" disabled>New script</button>
+    <nav id="list" class="list"><div class="empty-list"><span class="loading" aria-hidden="true"></span>Loading your scripts</div></nav>
+    <p id="modeNote" class="mode-note"></p>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <main class="main">
+    <div class="bar">
+      <button id="sideToggle" class="btn ghost only-narrow" type="button" aria-expanded="false" aria-controls="side">Scripts</button>
+      <div class="types" role="toolbar" aria-label="Element type" id="types"></div>
+      <div class="bar-right">
+        <span id="status" class="status" aria-live="polite"></span>
+        <button id="aiJump" class="btn ghost only-mid" type="button">Draft with Claude</button>
+      </div>
+    </div>
+
+    <div class="stage">
+      <p class="hint"><kbd>Enter</kbd> starts the next element. <kbd>Tab</kbd> changes its type. Type <b>INT.</b> or <b>EXT.</b> to start a scene.</p>
+      <article class="sheet">
+        <div class="titlepage">
+          <input id="title" placeholder="Untitled script" aria-label="Script title" autocomplete="off" disabled>
+          <span class="by">Written by</span>
+          <input id="author" placeholder="Your name" aria-label="Author" autocomplete="off" disabled>
+        </div>
+        <div id="page" class="page" contenteditable="false" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Screenplay"></div>
+      </article>
+      <div class="sheet-foot">
+        <span id="stats" class="stats"></span>
+        <button id="pdfBtn" class="btn" type="button" hidden>Download PDF</button>
+        <button id="fountainBtn" class="btn" type="button" hidden>Download text (Fountain)</button>
+        <button id="delBtn" class="btn danger" type="button" disabled>Delete script</button>
+      </div>
+    </div>
+  </main>
+
+  <aside class="assist" id="assist" aria-label="Draft with Claude" hidden>
+    <h2>Draft with Claude</h2>
+    <p>Describe what happens next and Claude writes it in screenplay format, right where your cursor is. New lines get a gold mark so you can spot them.</p>
+    <label for="aiPrompt">What should happen?</label>
+    <textarea id="aiPrompt" placeholder="Maya finds out her brother sold their dad's truck. She confronts him in the driveway. He's defensive, she's hurt."></textarea>
+    <div class="row">
+      <button id="aiWrite" class="btn primary" type="button">Write it</button>
+      <button id="aiCont" class="btn" type="button">Continue from here</button>
+      <button id="aiStop" class="btn" type="button" hidden>Stop</button>
+    </div>
+    <div id="aiNote" class="note" aria-live="polite"></div>
+    <div class="ideas">
+      <h3>A good request names</h3>
+      <button class="chip" type="button" data-idea="Who is in the scene: ">Who is in the scene</button>
+      <button class="chip" type="button" data-idea="Where and when it happens: ">Where and when it happens</button>
+      <button class="chip" type="button" data-idea="What each character wants: ">What each character wants</button>
+      <button class="chip" type="button" data-idea="How the scene ends: ">How the scene ends</button>
+    </div>
+  </aside>
+</div>
+
+<script>
+(() => {
+const TYPES = ['scene','action','character','parenthetical','dialogue','transition'];
+const LABEL = {scene:'Scene',action:'Action',character:'Character',parenthetical:'Paren',dialogue:'Dialogue',transition:'Transition'};
+const PH = {scene:'INT. KITCHEN - NIGHT',action:'Describe what we see.',character:'NAME',parenthetical:'(quietly)',dialogue:'What they say.',transition:'CUT TO:'};
+const NEXT = {scene:'action',action:'action',character:'dialogue',parenthetical:'dialogue',dialogue:'action',transition:'scene'};
+const LS_KEY = 'draft-room-scripts-v1';
+
+const $ = s => document.querySelector(s);
+const page = $('#page');
+const state = {mode:'loading', scripts:{}, currentId:null, coll:null, sample:null, downloads:null};
+let lastBlock = null;
+
+const cur = () => state.scripts[state.currentId];
+const newId = () => 's' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const blankScript = () => ({id:newId(), title:'', author:'', els:[{t:'scene',x:''}], updated:Date.now()});
+
+/* ---------- toolbar ---------- */
+const typesBar = $('#types');
+TYPES.forEach((t,i) => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.t = t; b.textContent = LABEL[t];
+  b.title = `${LABEL[t]} (Alt+${i+1})`; b.setAttribute('aria-pressed','false');
+  b.addEventListener('mousedown', e => e.preventDefault());
+  b.addEventListener('click', () => applyType(t));
+  typesBar.append(b);
+});
+function syncToolbar(t){ typesBar.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === t))); }
+function applyType(t){
+  if (page.getAttribute('contenteditable') !== 'true') return;
+  const c = caret();
+  if (c) { retype(c.b, t, c.off); return; }
+  const b = (lastBlock && page.contains(lastBlock)) ? lastBlock : page.lastElementChild;
+  if (b) { page.focus(); retype(b, t, b.textContent.length); }
+}
+
+/* ---------- blocks ---------- */
+function setType(d,t){ d.dataset.t = t; d.dataset.ph = PH[t]; }
+function markEmpty(d){ d.classList.toggle('empty', d.textContent === ''); }
+function setText(d,x){ if (x) d.textContent = x; else d.innerHTML = '<br>'; markEmpty(d); }
+function makeBlock(t,x){ const d = document.createElement('div'); d.className = 'el'; setType(d, TYPES.includes(t) ? t : 'action'); setText(d, x || ''); return d; }
+function readPage(){ return [...page.children].map(d => ({t: d.dataset.t || 'action', x: d.textContent.replace(/\n/g,' ')})); }
+
+function blockOf(node){
+  while (node && node !== page) { if (node.nodeType === 1 && node.parentNode === page) return node; node = node.parentNode; }
+  return null;
+}
+function caret(){
+  const sel = getSelection(); if (!sel.rangeCount) return null;
+  const r = sel.getRangeAt(0);
+  let b = blockOf(r.startContainer);
+  if (!b && r.startContainer === page && page.children.length) b = page.children[Math.min(r.startOffset, page.children.length-1)];
+  if (!b) return null;
+  let off = 0;
+  if (b.contains(r.startContainer)) { const pre = document.createRange(); pre.selectNodeContents(b); pre.setEnd(r.startContainer, r.startOffset); off = pre.toString().length; }
+  return {b, off, r, collapsed: r.collapsed};
+}
+function place(b, off){
+  const sel = getSelection(); const r = document.createRange();
+  const w = document.createTreeWalker(b, NodeFilter.SHOW_TEXT); let n, left = off;
+  while ((n = w.nextNode())) { if (left <= n.length) { r.setStart(n, left); r.collapse(true); sel.removeAllRanges(); sel.addRange(r); return; } left -= n.length; }
+  const last = b.lastChild;
+  r.setStart(b, last && last.nodeName === 'BR' ? b.childNodes.length - 1 : b.childNodes.length);
+  r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
+}
+function retype(b, t, off){ setType(b, t); if (off != null) place(b, off); syncToolbar(t); changed(); }
+function flatten(b){
+  const c = caret(); const inB = c && c.b === b;
+  setText(b, b.textContent.replace(/\n/g,' '));
+  if (inB) place(b, Math.min(c.off, b.textContent.length));
+}
+function normalize(){
+  for (const n of [...page.childNodes]) {
+    if (n.nodeType === 3) { if (!n.textContent.trim()) { n.remove(); continue; } const d = makeBlock('action', n.textContent); n.replaceWith(d); place(d, d.textContent.length); continue; }
+    if (n.nodeType !== 1 || n.nodeName === 'BR') { n.remove(); continue; }
+    if (!n.classList.contains('el') || !TYPES.includes(n.dataset.t)) { const t = TYPES.includes(n.dataset.t) ? n.dataset.t : 'action'; n.className = 'el'; setType(n, t); }
+    n.removeAttribute('style');
+    if (n.querySelector('*:not(br)')) flatten(n);
+    markEmpty(n);
+  }
+  if (!page.children.length) { const d = makeBlock('scene',''); page.append(d); place(d,0); }
+}
+
+/* ---------- editing ---------- */
+function onEnter(){
+  let c = caret(); if (!c) return;
+  if (!c.collapsed) { c.r.deleteContents(); normalize(); c = caret(); if (!c) return; }
+  const b = c.b, t = b.dataset.t, text = b.textContent;
+  if (text === '') { retype(b, t === 'action' ? 'character' : 'action', 0); return; }
+  const before = text.slice(0, c.off), after = text.slice(c.off);
+  setText(b, before);
+  const nb = makeBlock(after ? t : NEXT[t], after);
+  b.after(nb); place(nb, 0); syncToolbar(nb.dataset.t);
+  nb.scrollIntoView({block:'nearest'});
+  changed();
+}
+page.addEventListener('keydown', e => {
+  if (e.isComposing) return;
+  if (e.key === 'Enter') { e.preventDefault(); onEnter(); return; }
+  if (e.key === 'Tab') {
+    const c = caret(); if (!c) return; e.preventDefault();
+    const i = TYPES.indexOf(c.b.dataset.t), d = e.shiftKey ? -1 : 1;
+    retype(c.b, TYPES[(i + d + TYPES.length) % TYPES.length], c.off); return;
+  }
+  if (e.altKey && /^Digit[1-6]$/.test(e.code)) { e.preventDefault(); applyType(TYPES[+e.code.slice(5) - 1]); return; }
+  if (e.key === 'Backspace') {
+    const c = caret(); if (!c || !c.collapsed || c.off !== 0) return;
+    const b = c.b, prev = b.previousElementSibling;
+    if (!prev) { if (b.textContent === '') e.preventDefault(); return; }
+    e.preventDefault();
+    const pl = prev.textContent.length;
+    setText(prev, prev.textContent + b.textContent); b.remove(); place(prev, pl); syncToolbar(prev.dataset.t); changed(); return;
+  }
+  if (e.key === 'Delete') {
+    const c = caret(); if (!c || !c.collapsed || c.off !== c.b.textContent.length) return;
+    const b = c.b, nx = b.nextElementSibling; e.preventDefault(); if (!nx) return;
+    const l = b.textContent.length; setText(b, b.textContent + nx.textContent); nx.remove(); place(b, l); changed();
+  }
+});
+page.addEventListener('input', () => {
+  normalize();
+  const c = caret();
+  if (c && c.b.dataset.t === 'action' && /^(int|ext|est|i\/e)\.(\s|$)/i.test(c.b.textContent)) { setType(c.b, 'scene'); syncToolbar('scene'); }
+  changed();
+});
+page.addEventListener('paste', e => {
+  e.preventDefault();
+  const txt = (e.clipboardData || window.clipboardData).getData('text/plain'); if (!txt) return;
+  const lines = txt.replace(/\r/g,'').split('\n');
+  if (lines.length === 1) { document.execCommand('insertText', false, lines[0]); return; }
+  let c = caret(); if (!c) return;
+  if (!c.collapsed) { c.r.deleteContents(); normalize(); c = caret(); if (!c) return; }
+  const parsed = parseLines(lines); if (!parsed.length) return;
+  const b = c.b, text = b.textContent, before = text.slice(0, c.off), after = text.slice(c.off);
+  if (!before) setType(b, parsed[0].t);
+  setText(b, before + parsed[0].x);
+  let last = b;
+  for (const p of parsed.slice(1)) { const nb = makeBlock(p.t, p.x); last.after(nb); last = nb; }
+  const endOff = last.textContent.length;
+  if (after) setText(last, last.textContent + after);
+  place(last, endOff); changed();
+});
+function parseLines(lines){
+  const out = []; let prev = null;
+  for (let i = 0; i < lines.length; i++) {
+    const s = lines[i].trim();
+    if (!s) { prev = null; continue; }
+    const nextFilled = !!(lines[i+1] && lines[i+1].trim());
+    let t = 'action', x = s;
+    if (/^(int|ext|est|i\/e|int\.\/ext)[\.\s]/i.test(s) || (s.startsWith('.') && !s.startsWith('..'))) { t = 'scene'; if (s.startsWith('.')) x = s.slice(1); }
+    else if (s === s.toUpperCase() && /TO:$/.test(s)) t = 'transition';
+    else if (s.startsWith('(') && (prev === 'character' || prev === 'dialogue')) t = 'parenthetical';
+    else if (prev === 'character' || prev === 'parenthetical' || prev === 'dialogue') t = 'dialogue';
+    else if (s === s.toUpperCase() && /[A-Z]/.test(s) && s.length < 40 && nextFilled) t = 'character';
+    out.push({t, x}); prev = t;
+  }
+  return out;
+}
+document.addEventListener('selectionchange', () => {
+  const c = caret(); if (!c) return;
+  lastBlock = c.b; syncToolbar(c.b.dataset.t);
+});
+
+/* ---------- layout (for page count and PDF) ---------- */
+const LAY = {
+  scene:{l:1.5,w:60,up:true,sp:2}, action:{l:1.5,w:60,sp:1}, character:{l:3.7,w:38,up:true,sp:1},
+  parenthetical:{l:3.1,w:25,sp:0}, dialogue:{l:2.5,w:35,sp:0}, transition:{r:7.5,w:20,up:true,sp:1}
+};
+function wrap(text, w){
+  const out = []; let line = '';
+  for (let word of text.split(/\s+/).filter(Boolean)) {
+    while (word.length > w) { if (line) { out.push(line); line = ''; } out.push(word.slice(0, w)); word = word.slice(w); }
+    if (!line) line = word; else if ((line + ' ' + word).length <= w) line += ' ' + word; else { out.push(line); line = word; }
+  }
+  if (line) out.push(line);
+  return out.length ? out : [''];
+}
+function fmt(e){
+  let x = e.x.trim(); const L = LAY[e.t] || LAY.action;
+  if (L.up) x = x.toUpperCase();
+  if (e.t === 'parenthetical' && !x.startsWith('(')) x = '(' + x + ')';
+  return x;
+}
+function layout(els){
+  const MAX = 54, pages = [[]]; let y = 0;
+  els.filter(e => e.x.trim()).forEach(e => {
+    const L = LAY[e.t] || LAY.action, lines = wrap(fmt(e), L.w);
+    let sp = pages[pages.length-1].length ? L.sp : 0;
+    const keep = (e.t === 'character' || e.t === 'scene') ? 1 : 0;
+    if (y + sp + lines.length + keep > MAX && y > 0) { pages.push([]); y = 0; sp = 0; }
+    y += sp;
+    lines.forEach(ln => { if (y >= MAX) { pages.push([]); y = 0; } pages[pages.length-1].push({t:e.t, L, text:ln, y}); y++; });
+  });
+  return pages;
+}
+
+/* ---------- stats, list, status ---------- */
+let statsTimer = null;
+function updateStats(){
+  clearTimeout(statsTimer);
+  statsTimer = setTimeout(() => {
+    const s = cur(); if (!s) return;
+    const words = s.els.reduce((n,e) => n + (e.x.trim() ? e.x.trim().split(/\s+/).length : 0), 0);
+    const pages = s.els.some(e => e.x.trim()) ? layout(s.els).length : 0;
+    $('#stats').textContent = `About ${pages} ${pages === 1 ? 'page' : 'pages'}, ${words.toLocaleString()} ${words === 1 ? 'word' : 'words'}`;
+  }, 250);
+}
+function ago(ts){
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60) return 'Edited just now';
+  const m = Math.round(s / 60); if (m < 60) return `Edited ${m} min ago`;
+  const h = Math.round(m / 60); if (h < 24) return `Edited ${h} hr ago`;
+  return 'Edited ' + new Date(ts).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+}
+function renderList(){
+  const list = $('#list'); list.replaceChildren();
+  const all = Object.values(state.scripts).sort((a,b) => b.updated - a.updated);
+  for (const s of all) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'item';
+    b.setAttribute('aria-current', String(s.id === state.currentId));
+    const t = document.createElement('span'); t.className = 't'; t.textContent = s.title.trim() || 'Untitled script';
+    const m = document.createElement('span'); m.className = 'm'; m.textContent = ago(s.updated);
+    b.append(t, m);
+    b.addEventListener('click', () => { openScript(s.id); closeSide(); });
+    list.append(b);
+  }
+}
+function setStatus(t){ $('#status').textContent = t; }
+
+/* ---------- persistence ---------- */
+let saveTimer = null, dirty = false;
+const queues = {};
+function changed(){
+  const s = cur(); if (!s) return;
+  s.els = readPage(); s.updated = Date.now(); dirty = true;
+  updateStats(); schedule();
+}
+function schedule(){
+  setStatus('Editing');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { dirty = false; persist(state.currentId); renderList(); }, 900);
+}
+function flushNow(){ if (dirty) { clearTimeout(saveTimer); dirty = false; persist(state.currentId); } }
+const serialize = s => ({title:s.title, author:s.author, els:s.els, updated:s.updated});
+function saveLocal(){ try { localStorage.setItem(LS_KEY, JSON.stringify(state.scripts)); return true; } catch { return false; } }
+function loadLocal(){ try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {}; } catch { return {}; } }
+function useLocal(){
+  state.mode = 'local';
+  $('#modeNote').textContent = 'Saved in this browser only. Clearing your browser data erases these scripts.';
+}
+async function persist(id){
+  const s = state.scripts[id]; if (!s) return;
+  if (state.mode !== 'cloud') { setStatus(saveLocal() ? 'Saved on this device' : 'Not saved. Download a copy to keep your work.'); return; }
+  const q = queues[id] || (queues[id] = {busy:false, again:false});
+  if (q.busy) { q.again = true; return; }
+  q.busy = true; setStatus('Saving');
+  try {
+    await state.coll.doc(id).set(serialize(s));
+    setStatus('Saved');
+  } catch (e) {
+    const code = e && e.code;
+    if (code === 'quota_exceeded') setStatus('Storage is full. Delete a script to make room.');
+    else if (code === 'invalid_argument' && JSON.stringify(serialize(s)).length > 250000) setStatus('Too long to save in one script. Split it into two.');
+    else if (code === 'invalid_argument' || code === 'revoked' || code === 'not_granted') { useLocal(); setStatus(saveLocal() ? 'Saved on this device' : 'Not saved'); }
+    else setStatus('Not saved yet. It retries on your next edit.');
+  }
+  q.busy = false;
+  if (q.again) { q.again = false; persist(id); }
+}
+
+/* ---------- scripts ---------- */
+function openScript(id){
+  flushNow();
+  state.currentId = id;
+  const s = cur();
+  page.replaceChildren(...(s.els.length ? s.els : [{t:'scene',x:''}]).map(e => makeBlock(e.t, e.x)));
+  $('#title').value = s.title; $('#author').value = s.author;
+  lastBlock = page.firstElementChild; syncToolbar(lastBlock.dataset.t);
+  delArmed = false; $('#delBtn').textContent = 'Delete script';
+  updateStats(); renderList(); setStatus('');
+}
+function createScript(){
+  flushNow();
+  const s = blankScript(); state.scripts[s.id] = s;
+  openScript(s.id); persist(s.id);
+  $('#title').focus();
+}
+let delArmed = false, delTimer = null;
+async function deleteScript(){
+  const del = $('#delBtn');
+  if (!delArmed) { delArmed = true; del.textContent = 'Click again to delete'; clearTimeout(delTimer); delTimer = setTimeout(() => { delArmed = false; del.textContent = 'Delete script'; }, 3500); return; }
+  delArmed = false; clearTimeout(delTimer); clearTimeout(saveTimer); dirty = false;
+  const id = state.currentId;
+  delete state.scripts[id];
+  if (state.mode === 'cloud') { try { await state.coll.doc(id).delete(); } catch { setStatus('Could not delete. Try again.'); } }
+  else saveLocal();
+  const rest = Object.values(state.scripts).sort((a,b) => b.updated - a.updated);
+  if (rest.length) openScript(rest[0].id); else createScript();
+  setStatus('Deleted');
+}
+$('#newBtn').addEventListener('click', () => { createScript(); closeSide(); });
+$('#delBtn').addEventListener('click', deleteScript);
+$('#title').addEventListener('input', e => { const s = cur(); s.title = e.target.value; s.updated = Date.now(); dirty = true; schedule(); });
+$('#author').addEventListener('input', e => { const s = cur(); s.author = e.target.value; s.updated = Date.now(); dirty = true; schedule(); });
+$('#title').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#author').focus(); } });
+$('#author').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const f = page.firstElementChild; page.focus(); if (f) place(f, f.textContent.length); } });
+window.addEventListener('pagehide', flushNow);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushNow(); });
+
+/* ---------- sidebar on phones ---------- */
+function closeSide(){ $('#side').classList.remove('open'); $('#scrim').hidden = true; $('#sideToggle').setAttribute('aria-expanded','false'); }
+$('#sideToggle').addEventListener('click', () => { const open = !$('#side').classList.contains('open'); $('#side').classList.toggle('open', open); $('#scrim').hidden = !open; $('#sideToggle').setAttribute('aria-expanded', String(open)); });
+$('#scrim').addEventListener('click', closeSide);
+
+/* ---------- export ---------- */
+const slug = s => (s.title.trim() || 'untitled-script').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'script';
+function toFountain(s){
+  let out = `Title: ${s.title.trim() || 'Untitled'}\n`;
+  if (s.author.trim()) out += `Credit: Written by\nAuthor: ${s.author.trim()}\n`;
+  out += '\n';
+  const els = s.els.filter(e => e.x.trim());
+  els.forEach((e, i) => {
+    const x = e.x.trim(), prev = els[i-1];
+    const tight = (e.t === 'parenthetical' || e.t === 'dialogue') && prev && ['character','parenthetical','dialogue'].includes(prev.t);
+    if (i > 0 && !tight) out += '\n';
+    let line = x;
+    if (e.t === 'scene') { line = x.toUpperCase(); if (!/^(INT|EXT|EST|I\/E)[\.\s]/.test(line)) line = '.' + line; }
+    else if (e.t === 'character') { line = x.toUpperCase(); if (!/[A-Z]/.test(line)) line = '@' + line; }
+    else if (e.t === 'transition') { line = x.toUpperCase(); if (!/TO:$/.test(line)) line = '> ' + line; }
+    else if (e.t === 'parenthetical') { if (!x.startsWith('(')) line = '(' + x + ')'; }
+    else if (e.t === 'action' && x === x.toUpperCase() && /[A-Z]/.test(x)) line = '!' + x;
+    out += line + '\n';
+  });
+  return out;
+}
+function toPdf(s){
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({unit:'in', format:'letter'});
+  doc.setFont('courier','normal'); doc.setFontSize(12);
+  doc.setFont('courier','bold'); doc.text((s.title.trim() || 'Untitled').toUpperCase(), 4.25, 3.6, {align:'center'});
+  doc.setFont('courier','normal');
+  if (s.author.trim()) { doc.text('Written by', 4.25, 4.1, {align:'center'}); doc.text(s.author.trim(), 4.25, 4.45, {align:'center'}); }
+  layout(s.els).forEach((p, pi) => {
+    doc.addPage();
+    if (pi > 0) doc.text((pi + 1) + '.', 7.5, 0.6, {align:'right'});
+    p.forEach(r => {
+      const y = 1 + (r.y + 1) / 6;
+      if (r.L.r != null) doc.text(r.text, r.L.r, y, {align:'right'});
+      else { if (r.t === 'scene') doc.setFont('courier','bold'); doc.text(r.text, r.L.l, y); doc.setFont('courier','normal'); }
+    });
+  });
+  return doc.output('arraybuffer');
+}
+async function download(filename, data){
+  try { await state.downloads.save({filename, data}); }
+  catch (e) {
+    const code = e && e.code;
+    if (code === 'declined') return;
+    if (code === 'rate_limited') { setStatus('A download prompt is already open.'); return; }
+    if (code === 'rejected_extension' || code === 'extension_not_enabled') { setStatus('That file type is not available here.'); return; }
+    if (code === 'bad_request') { setStatus('Download did not start. Try again.'); return; }
+    $('#pdfBtn').hidden = true; $('#fountainBtn').hidden = true; setStatus('Downloads are not available here.');
+  }
+}
+$('#pdfBtn').addEventListener('click', () => { flushNow(); const s = cur(); download(slug(s) + '.pdf', toPdf(s)); });
+$('#fountainBtn').addEventListener('click', () => { flushNow(); const s = cur(); download(slug(s) + '.fountain.txt', toFountain(s)); });
+
+/* ---------- Claude drafting ---------- */
+let ctl = null;
+const aiNote = $('#aiNote');
+function errCopy(code){
+  switch (code) {
+    case 'cancelled': return 'Stopped. Nothing was added.';
+    case 'not_granted': return 'Claude drafting is off for this page. You can keep writing on your own.';
+    case 'rate_limited': return 'Too many requests right now. Wait a minute, then try again.';
+    case 'sampling_disabled': case 'not_declared': case 'capability_disabled': case 'capability_removed': return 'Claude drafting is off for this page. You can keep writing on your own.';
+    case 'prompt_too_large': return 'The script is too long to send. Place your cursor near the part you want to continue and try again.';
+    case 'refused': return 'Claude declined that request. Try describing the scene differently.';
+    case 'empty': case 'empty_completion': case 'invalid_json': return 'Claude sent back nothing usable. Try rewording your request.';
+    default: return "Claude couldn't write that. Try again, or make the request more specific.";
+  }
+}
+function setBusy(on){
+  $('#aiWrite').disabled = on; $('#aiCont').disabled = on; $('#aiStop').hidden = !on;
+  if (on) aiNote.innerHTML = '<span class="loading" aria-hidden="true"></span>Claude is writing. This can take up to a minute.';
+}
+function cleanEls(res){
+  const arr = res && Array.isArray(res.elements) ? res.elements : Array.isArray(res) ? res : [];
+  return arr.map(e => ({t: TYPES.includes(e && e.type) ? e.type : 'action', x: String((e && e.text) || '').replace(/\s*\n\s*/g,' ').trim()}))
+            .filter(e => e.x).slice(0, 200);
+}
+function insertEls(els){
+  let anchor = (lastBlock && page.contains(lastBlock)) ? lastBlock : page.lastElementChild;
+  const nodes = els.map(e => { const d = makeBlock(e.t, e.x); d.classList.add('fresh'); return d; });
+  if (anchor && anchor.textContent === '') { anchor.replaceWith(...nodes); }
+  else if (anchor) anchor.after(...nodes); else page.append(...nodes);
+  const last = nodes[nodes.length - 1];
+  page.focus(); place(last, last.textContent.length); lastBlock = last;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  nodes[0].scrollIntoView({block:'center', behavior: reduce ? 'auto' : 'smooth'});
+  setTimeout(() => nodes.forEach(n => n.classList.add('faded')), 6000);
+  setTimeout(() => nodes.forEach(n => n.classList.remove('fresh','faded')), 7400);
+  changed();
+}
+async function draft(kind){
+  if (!state.sample) return;
+  const s = cur(); const req = $('#aiPrompt').value.trim();
+  if (kind === 'write' && !req) { aiNote.textContent = 'Describe what should happen first.'; $('#aiPrompt').focus(); return; }
+  const ctx = s.els.filter(e => e.x.trim()).slice(-60).map(e => `[${e.t.toUpperCase()}] ${e.x.trim()}`).join('\n') || '(The script is empty so far.)';
+  const task = kind === 'write'
+    ? `Write the next part of the screenplay based on this request from the writer:\n"""${req}"""`
+    : 'Continue the screenplay naturally from exactly where it leaves off. Write one scene or less.';
+  const prompt = `You are an experienced screenwriter helping a student draft a screenplay in standard format.
+
+Title: ${s.title.trim() || 'Untitled'}
+
+The script so far (most recent part), one element per line with its type in brackets:
+${ctx}
+
+${task}
+
+Rules:
+- Action lines are present tense, visual, and 1 to 4 sentences each.
+- Dialogue sounds natural and fits the characters already in the script.
+- Keep character names consistent. A new character gets a short introduction in action the first time they appear.
+- About 1 to 2 pages. Do not repeat anything already written.
+
+Return only JSON in exactly this shape, with no markdown:
+{"elements":[{"type":"scene|action|character|parenthetical|dialogue|transition","text":"..."}]}
+Every dialogue element comes right after a character element, or after a parenthetical that follows a character. Parenthetical text includes its parentheses. Scene headings look like "INT. PLACE - DAY".`;
+  setBusy(true); ctl = new AbortController();
+  try {
+    const res = await state.sample.json(prompt, {signal: ctl.signal, cache: false});
+    const els = cleanEls(res);
+    if (!els.length) throw {code:'empty'};
+    insertEls(els);
+    aiNote.textContent = `Added ${els.length} ${els.length === 1 ? 'element' : 'elements'} with a gold mark. Rewrite anything you want.`;
+    if (kind === 'write') $('#aiPrompt').value = '';
+  } catch (e) {
+    aiNote.textContent = errCopy(e && e.code);
+    if (e && ['not_granted','sampling_disabled','not_declared','capability_disabled','capability_removed'].includes(e.code)) { $('#aiWrite').hidden = true; $('#aiCont').hidden = true; }
+  } finally { setBusy(false); ctl = null; }
+}
+$('#aiWrite').addEventListener('click', () => draft('write'));
+$('#aiCont').addEventListener('click', () => draft('continue'));
+$('#aiStop').addEventListener('click', () => ctl && ctl.abort());
+$('#aiJump').addEventListener('click', () => { $('#assist').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}); $('#aiPrompt').focus({preventScroll:true}); });
+document.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', () => {
+  const ta = $('#aiPrompt'); const add = ch.dataset.idea;
+  ta.value = ta.value.trim() ? ta.value.replace(/\s*$/, '\n') + add : add;
+  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}));
+
+/* ---------- start ---------- */
+async function init(){
+  let db = null, user = null;
+  const use = n => (window.claude && typeof window.claude.use === 'function') ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+  [db, user, state.sample, state.downloads] = await Promise.all(['db','user','sample','downloads'].map(use));
+  if (!state.downloads) state.downloads = {save: async ({filename, data}) => {
+    const blob = data instanceof Blob ? data : new Blob([data], {type: filename.endsWith('.pdf') ? 'application/pdf' : 'text/plain'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }};
+
+  if (db && user) {
+    try {
+      const id = await user.id();
+      if (id) {
+        state.coll = db.collection('data/users/' + id);
+        const snap = await state.coll.limit(1000).get();
+        snap.docs.forEach(d => {
+          const v = d.data() || {};
+          const els = Array.isArray(v.els) && v.els.length
+            ? v.els.map(e => ({t: TYPES.includes(e && e.t) ? e.t : 'action', x: String((e && e.x) || '')}))
+            : [{t:'scene', x:''}];
+          state.scripts[d.id] = {id:d.id, title:String(v.title || ''), author:String(v.author || ''), els, updated:+v.updated || 0};
+        });
+        state.mode = 'cloud';
+        $('#modeNote').textContent = 'Saved to your Claude account. Open this page anywhere to keep writing.';
+      }
+    } catch { state.scripts = {}; }
+  }
+  if (state.mode !== 'cloud') {
+    useLocal();
+    const local = loadLocal();
+    for (const [id, s] of Object.entries(local)) if (s && Array.isArray(s.els)) state.scripts[id] = {id, title:s.title || '', author:s.author || '', els:s.els.length ? s.els : [{t:'scene',x:''}], updated:s.updated || 0};
+  }
+
+  $('#assist').hidden = !state.sample;
+  $('#aiJump').hidden = !state.sample;
+  const canDl = !!state.downloads;
+  $('#fountainBtn').hidden = !canDl;
+  $('#pdfBtn').hidden = !(canDl && window.jspdf && window.jspdf.jsPDF);
+
+  page.setAttribute('contenteditable', 'true');
+  ['#newBtn','#delBtn','#title','#author'].forEach(s => $(s).disabled = false);
+
+  const all = Object.values(state.scripts).sort((a,b) => b.updated - a.updated);
+  if (all.length) openScript(all[0].id); else createScript();
+  setInterval(renderList, 60000);
+}
+init();
+})();
+</script>
+</body>
+</html>
